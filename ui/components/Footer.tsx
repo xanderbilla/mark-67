@@ -5,7 +5,7 @@ import HealthIndicator from "./HealthIndicator";
 export default function Footer() {
   return (
     <footer className="border-t border-gray-200 bg-white py-4 sm:py-6">
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-3xl mx-auto px-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
           <div className="text-sm text-gray-500 text-center sm:text-left">
             <p>&copy; 2025 Todo App. Built with Spring Boot & Next.js</p>
