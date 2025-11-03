@@ -42,18 +42,18 @@ export default function TodoForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
-          className="text-lg py-3 px-4 border-2 border-gray-200 focus:border-blue-500 rounded-xl"
+          className="text-lg py-3 px-4 border-2 border-gray-200 focus:border-gray-400 rounded-xl"
         />
         <Input
           placeholder="Add a description (optional)..."
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="py-3 px-4 border-2 border-gray-200 focus:border-blue-500 rounded-xl"
+          className="py-3 px-4 border-2 border-gray-200 focus:border-gray-400 rounded-xl"
         />
         <Button
           type="submit"
           disabled={!title.trim() || createTodo.isPending}
-          className="w-full py-3 text-lg font-medium bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors"
+          className="w-full py-3 text-lg font-medium bg-gray-800 hover:bg-gray-900 rounded-xl transition-colors"
         >
           {createTodo.isPending ? "Adding..." : "Add Task"}
         </Button>

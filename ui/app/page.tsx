@@ -3,7 +3,7 @@ import TodoList from "@/components/TodoList";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-12">
       <div className="max-w-2xl mx-auto px-4">
         <header className="text-center mb-12">
           <h1 className="text-6xl font-bold text-gray-900 mb-4 tracking-tight">
