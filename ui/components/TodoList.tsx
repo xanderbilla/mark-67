@@ -48,17 +48,21 @@ export default function TodoList() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold text-gray-800">Your Tasks</h2>
-        <div className="text-sm text-gray-500">{todos?.length || 0} total</div>
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
+          Your Tasks
+        </h2>
+        <div className="text-xs sm:text-sm text-gray-500">
+          {todos?.length || 0} total
+        </div>
       </div>
 
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-1 sm:gap-2 mb-4 sm:mb-6">
         <Button
           size="sm"
           variant={filter === "all" ? "default" : "outline"}
           onClick={() => setFilter("all")}
-          className="rounded-full"
+          className="rounded-full text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
         >
           All ({todos?.length || 0})
         </Button>
@@ -66,7 +70,7 @@ export default function TodoList() {
           size="sm"
           variant={filter === "active" ? "default" : "outline"}
           onClick={() => setFilter("active")}
-          className="rounded-full"
+          className="rounded-full text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
         >
           Active ({todos?.filter((t) => !t.completed).length || 0})
         </Button>
@@ -74,7 +78,7 @@ export default function TodoList() {
           size="sm"
           variant={filter === "completed" ? "default" : "outline"}
           onClick={() => setFilter("completed")}
-          className="rounded-full"
+          className="rounded-full text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
         >
           Done ({todos?.filter((t) => t.completed).length || 0})
         </Button>
