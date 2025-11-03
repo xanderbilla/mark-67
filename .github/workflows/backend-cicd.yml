@@ -7,6 +7,7 @@ on:
   pull_request:
     branches: [main]
     paths: ["demo/**"]
+  workflow_dispatch:
 
 env:
   DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend
