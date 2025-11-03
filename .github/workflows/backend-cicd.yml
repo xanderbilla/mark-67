@@ -87,7 +87,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to Backend EC2
+      - name: Setup and Deploy to Backend EC2
         if: github.ref == 'refs/heads/main'
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -95,8 +95,64 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # Create directory structure
+            sudo mkdir -p /opt/todo-app/backend
+            sudo chown ubuntu:ubuntu /opt/todo-app/backend
+
+            # Install Docker if not present
+            if ! command -v docker &> /dev/null; then
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sudo sh get-docker.sh
+              sudo usermod -aG docker ubuntu
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              # Logout and login to refresh group membership
+              newgrp docker
+            fi
+
+            # Create docker-compose.yml if it doesn't exist
+            if [ ! -f /opt/todo-app/backend/docker-compose.yml ]; then
+              cat > /opt/todo-app/backend/docker-compose.yml << 'EOF'
+            version: '3.8'
+            services:
+              mongodb:
+                image: mongo:7
+                container_name: todo-mongodb
+                ports:
+                  - "27017:27017"
+                environment:
+                  - MONGO_INITDB_DATABASE=todoapp
+                volumes:
+                  - mongodb_data:/data/db
+                networks:
+                  - todo-network
+                restart: unless-stopped
+
+              todo-backend:
+                image: placeholder/todo-backend:latest
+                container_name: todo-backend
+                ports:
+                  - "8080:8080"
+                environment:
+                  - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/todoapp
+                  - SPRING_PROFILES_ACTIVE=production
+                depends_on:
+                  - mongodb
+                networks:
+                  - todo-network
+                restart: unless-stopped
+
+            volumes:
+              mongodb_data:
+
+            networks:
+              todo-network:
+                driver: bridge
+            EOF
+            fi
+
             # Navigate to application directory
-            cd /opt/todo-app/backend || exit 1
+            cd /opt/todo-app/backend
 
             # Update docker-compose.yml with new image tag
             sed -i "s|image:.*todo-backend.*|image: ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.SHORT_SHA }}|g" docker-compose.yml

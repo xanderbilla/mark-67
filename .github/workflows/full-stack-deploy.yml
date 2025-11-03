@@ -138,6 +138,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Setup Frontend Environment
+        if: needs.build-frontend.result == 'success'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ needs.get-infrastructure.outputs.frontend-ip }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Create directory structure
+            sudo mkdir -p /opt/todo-app/frontend
+            sudo chown ubuntu:ubuntu /opt/todo-app/frontend
+
+            # Install Docker if not present
+            if ! command -v docker &> /dev/null; then
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sudo sh get-docker.sh
+              sudo usermod -aG docker ubuntu
+              sudo systemctl start docker
+              sudo systemctl enable docker
+            fi
+
+            # Create docker-compose.yml if it doesn't exist
+            if [ ! -f /opt/todo-app/frontend/docker-compose.yml ]; then
+              cat > /opt/todo-app/frontend/docker-compose.yml << 'EOF'
+            version: '3.8'
+            services:
+              todo-frontend:
+                image: placeholder/todo-frontend:latest
+                container_name: todo-frontend
+                ports:
+                  - "3000:3000"
+                environment:
+                  - NODE_ENV=production
+                restart: unless-stopped
+                networks:
+                  - todo-network
+            networks:
+              todo-network:
+                driver: bridge
+            EOF
+            fi
+
       - name: Deploy Frontend
         if: needs.build-frontend.result == 'success'
         uses: appleboy/ssh-action@v1.0.3
@@ -151,6 +193,68 @@ jobs:
             docker compose pull && docker compose up -d --force-recreate
             sleep 10
             curl -f http://localhost:3000 || exit 1
+
+      - name: Setup Backend Environment
+        if: needs.build-backend.result == 'success'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ needs.get-infrastructure.outputs.backend-ip }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Create directory structure
+            sudo mkdir -p /opt/todo-app/backend
+            sudo chown ubuntu:ubuntu /opt/todo-app/backend
+
+            # Install Docker if not present
+            if ! command -v docker &> /dev/null; then
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sudo sh get-docker.sh
+              sudo usermod -aG docker ubuntu
+              sudo systemctl start docker
+              sudo systemctl enable docker
+            fi
+
+            # Create docker-compose.yml if it doesn't exist
+            if [ ! -f /opt/todo-app/backend/docker-compose.yml ]; then
+              cat > /opt/todo-app/backend/docker-compose.yml << 'EOF'
+            version: '3.8'
+            services:
+              mongodb:
+                image: mongo:7
+                container_name: todo-mongodb
+                ports:
+                  - "27017:27017"
+                environment:
+                  - MONGO_INITDB_DATABASE=todoapp
+                volumes:
+                  - mongodb_data:/data/db
+                networks:
+                  - todo-network
+                restart: unless-stopped
+
+              todo-backend:
+                image: placeholder/todo-backend:latest
+                container_name: todo-backend
+                ports:
+                  - "8080:8080"
+                environment:
+                  - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/todoapp
+                  - SPRING_PROFILES_ACTIVE=production
+                depends_on:
+                  - mongodb
+                networks:
+                  - todo-network
+                restart: unless-stopped
+
+            volumes:
+              mongodb_data:
+
+            networks:
+              todo-network:
+                driver: bridge
+            EOF
+            fi
 
       - name: Deploy Backend
         if: needs.build-backend.result == 'success'
