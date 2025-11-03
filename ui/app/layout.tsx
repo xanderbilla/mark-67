@@ -10,8 +10,8 @@ const commissioner = Commissioner({
 });
 
 export const metadata: Metadata = {
-  title: "Todo App",
-  description: "A simple todo application with Spring Boot and Next.js",
+  title: "Your Todo List",
+  description: "A modern todo application with Spring Boot and Next.js",
 };
 
 export default function RootLayout({
