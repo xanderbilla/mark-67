@@ -1,0 +1,65 @@
+name: Get Infrastructure Info
+
+on:
+  workflow_call:
+    outputs:
+      frontend-ip:
+        description: "Frontend EC2 Public IP"
+        value: ${{ jobs.get-info.outputs.frontend-ip }}
+      backend-ip:
+        description: "Backend EC2 Public IP"
+        value: ${{ jobs.get-info.outputs.backend-ip }}
+      puppet-master-ip:
+        description: "Puppet Master Public IP"
+        value: ${{ jobs.get-info.outputs.puppet-master-ip }}
+
+jobs:
+  get-info:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend-ip: ${{ steps.terraform.outputs.frontend-ip }}
+      backend-ip: ${{ steps.terraform.outputs.backend-ip }}
+      puppet-master-ip: ${{ steps.terraform.outputs.puppet-master-ip }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Get Infrastructure IPs from Terraform State
+        id: terraform
+        working-directory: ./terraform
+        run: |
+          # Initialize Terraform to access remote state
+          terraform init
+
+          # Get outputs from Terraform state
+          FRONTEND_IP=$(terraform output -raw app_frontend_public_ip 2>/dev/null || echo "")
+          BACKEND_IP=$(terraform output -raw app_backend_public_ip 2>/dev/null || echo "")
+          PUPPET_MASTER_IP=$(terraform output -raw puppet_master_public_ip 2>/dev/null || echo "")
+
+          if [ -z "$FRONTEND_IP" ] || [ -z "$BACKEND_IP" ]; then
+            echo "Error: Could not retrieve EC2 IPs from Terraform state"
+            echo "Make sure infrastructure is deployed and Terraform state is accessible"
+            exit 1
+          fi
+
+          echo "frontend-ip=$FRONTEND_IP" >> $GITHUB_OUTPUT
+          echo "backend-ip=$BACKEND_IP" >> $GITHUB_OUTPUT
+          echo "puppet-master-ip=$PUPPET_MASTER_IP" >> $GITHUB_OUTPUT
+
+          echo "Retrieved IPs:"
+          echo "  Frontend: $FRONTEND_IP"
+          echo "  Backend: $BACKEND_IP"
+          echo "  Puppet Master: $PUPPET_MASTER_IP"
