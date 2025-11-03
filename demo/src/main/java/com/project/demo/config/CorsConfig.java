@@ -9,7 +9,8 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")
+        // API endpoints
+        registry.addMapping("/api/**")
                 .allowedOrigins(
                         "http://localhost:3000",
                         "http://localhost:3001",
@@ -17,6 +18,18 @@ public class CorsConfig implements WebMvcConfigurer {
                         "http://98.92.207.103:3000" // Current frontend EC2 IP
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true);
+
+        // Actuator endpoints
+        registry.addMapping("/actuator/**")
+                .allowedOrigins(
+                        "http://localhost:3000",
+                        "http://localhost:3001",
+                        "http://127.0.0.1:3000",
+                        "http://98.92.207.103:3000" // Current frontend EC2 IP
+                )
+                .allowedMethods("GET", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);
     }

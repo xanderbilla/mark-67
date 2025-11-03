@@ -1,5 +1,6 @@
 import TodoForm from "@/components/TodoForm";
 import TodoList from "@/components/TodoList";
+import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
@@ -24,6 +25,8 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <Footer />
     </div>
   );
 }
