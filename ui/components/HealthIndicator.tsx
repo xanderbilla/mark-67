@@ -1,7 +1,6 @@
 "use client";
 
 import { useHealth } from "@/hooks/useHealth";
-import { CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react";
 
 export default function HealthIndicator() {
   const { data: health, isLoading, error } = useHealth();
@@ -9,47 +8,37 @@ export default function HealthIndicator() {
   const getStatusInfo = () => {
     if (isLoading) {
       return {
-        icon: <Loader2 className="h-4 w-4 animate-spin" />,
-        text: "Checking...",
-        color: "text-gray-500",
-        bgColor: "bg-gray-100",
+        dot: "bg-gray-400 animate-pulse",
+        text: "API Checking...",
       };
     }
 
     if (error) {
       return {
-        icon: <XCircle className="h-4 w-4" />,
-        text: "Offline",
-        color: "text-red-600",
-        bgColor: "bg-red-50",
+        dot: "bg-red-500",
+        text: "API Disconnected",
       };
     }
 
     if (health?.status === "UP") {
       return {
-        icon: <CheckCircle className="h-4 w-4" />,
-        text: "Online",
-        color: "text-green-600",
-        bgColor: "bg-green-50",
+        dot: "bg-green-500",
+        text: "API Connected",
       };
     }
 
     return {
-      icon: <AlertCircle className="h-4 w-4" />,
-      text: "Issues",
-      color: "text-yellow-600",
-      bgColor: "bg-yellow-50",
+      dot: "bg-yellow-500",
+      text: "API Issues",
     };
   };
 
   const statusInfo = getStatusInfo();
 
   return (
-    <div
-      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color} ${statusInfo.bgColor}`}
-    >
-      {statusInfo.icon}
-      <span>Backend {statusInfo.text}</span>
+    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium text-gray-600 bg-gray-100">
+      <div className={`w-2 h-2 rounded-full ${statusInfo.dot}`}></div>
+      <span>{statusInfo.text}</span>
     </div>
   );
 }
