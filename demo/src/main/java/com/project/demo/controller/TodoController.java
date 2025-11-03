@@ -16,6 +16,7 @@ import java.util.List;
 @RequestMapping("/api/todos")
 @RequiredArgsConstructor
 public class TodoController {
+    // Todo API Controller - handles CRUD operations
 
     private final TodoService todoService;
 
