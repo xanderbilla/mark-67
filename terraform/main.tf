@@ -122,6 +122,33 @@ resource "aws_security_group" "puppet_sg" {
     description = "Frontend application port"
   }
 
+  # Nagios web interface port
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Nagios web interface port"
+  }
+
+  # NRPE port for Nagios monitoring
+  ingress {
+    from_port   = 5666
+    to_port     = 5666
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+    description = "NRPE port for Nagios monitoring"
+  }
+
+  # ICMP for Nagios ping monitoring
+  ingress {
+    from_port   = -1
+    to_port     = -1
+    protocol    = "icmp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "ICMP for Nagios ping monitoring"
+  }
+
   # All outbound traffic
   egress {
     from_port   = 0
@@ -218,5 +245,33 @@ resource "aws_instance" "app_backend" {
     Project = var.project_name
     Role    = "puppet-agent"
     App     = "backend"
+  }
+}
+
+# Nagios Master EC2 Instance
+resource "aws_instance" "nagios_master" {
+  ami                    = local.ami_id
+  instance_type          = var.instance_type
+  key_name               = var.key_pair_name
+  vpc_security_group_ids = [aws_security_group.puppet_sg.id]
+  subnet_id              = aws_subnet.puppet_public_subnet.id
+  user_data              = base64encode(templatefile("${path.module}/scripts/nagios-master-setup.sh", {
+    puppet_master_ip = aws_instance.puppet_master.private_ip
+    frontend_ip      = aws_instance.app_frontend.private_ip
+    backend_ip       = aws_instance.app_backend.private_ip
+  }))
+
+  depends_on = [aws_instance.puppet_master, aws_instance.app_frontend, aws_instance.app_backend]
+
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 15
+    encrypted   = true
+  }
+
+  tags = {
+    Name    = "nagios-master"
+    Project = var.project_name
+    Role    = "monitoring"
   }
 }

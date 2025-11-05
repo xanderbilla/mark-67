@@ -44,12 +44,23 @@ output "security_group_id" {
   value       = aws_security_group.puppet_sg.id
 }
 
+output "nagios_master_public_ip" {
+  description = "Public IP address of the Nagios Master"
+  value       = aws_instance.nagios_master.public_ip
+}
+
+output "nagios_master_private_ip" {
+  description = "Private IP address of the Nagios Master"
+  value       = aws_instance.nagios_master.private_ip
+}
+
 output "ssh_connection_commands" {
   description = "SSH commands to connect to instances"
   value = {
-    puppet_master = "ssh -i ~/.ssh/${var.key_pair_name}.pem ec2-user@${aws_instance.puppet_master.public_ip}"
-    app_frontend  = "ssh -i ~/.ssh/${var.key_pair_name}.pem ec2-user@${aws_instance.app_frontend.public_ip}"
-    app_backend   = "ssh -i ~/.ssh/${var.key_pair_name}.pem ec2-user@${aws_instance.app_backend.public_ip}"
+    puppet_master = "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${aws_instance.puppet_master.public_ip}"
+    app_frontend  = "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${aws_instance.app_frontend.public_ip}"
+    app_backend   = "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${aws_instance.app_backend.public_ip}"
+    nagios_master = "ssh -i ~/.ssh/${var.key_pair_name}.pem ubuntu@${aws_instance.nagios_master.public_ip}"
   }
 }
 
@@ -67,5 +78,13 @@ output "application_urls" {
   value = {
     frontend_app = "http://${aws_instance.app_frontend.public_ip}:3000"
     backend_app  = "http://${aws_instance.app_backend.public_ip}:8080"
+  }
+}
+
+output "monitoring_urls" {
+  description = "Monitoring URLs"
+  value = {
+    nagios_web_ui = "http://${aws_instance.nagios_master.public_ip}/nagios4"
+    nagios_login  = "Username: nagiosadmin, Password: Check /tmp/nagios-password.txt on Nagios server"
   }
 }
