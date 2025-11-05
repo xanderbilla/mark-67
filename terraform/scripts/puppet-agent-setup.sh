@@ -174,32 +174,7 @@ test_connection() {
     log "sudo /opt/puppetlabs/bin/puppetserver ca sign --all"
 }
 
-# Install NRPE for Nagios monitoring
-install_nrpe() {
-    log "Installing NRPE for Nagios monitoring..."
-    
-    # Install NRPE and plugins
-    apt install -y nagios-nrpe-server nagios-plugins-basic nagios-plugins-standard
-    
-    # Configure NRPE
-    sed -i 's/allowed_hosts=127.0.0.1,::1/allowed_hosts=127.0.0.1,::1,10.0.1.0\/24/g' /etc/nagios/nrpe.cfg
-    
-    # Add custom commands
-    cat >> /etc/nagios/nrpe.cfg << EOF
 
-# Custom commands for monitoring
-command[check_docker_containers]=/usr/lib/nagios/plugins/check_procs -c 1: -C docker
-command[check_puppet_agent]=/usr/lib/nagios/plugins/check_procs -c 1: -C puppet
-command[check_disk_usage]=/usr/lib/nagios/plugins/check_disk -w 20% -c 10% -p /
-command[check_memory]=/usr/lib/nagios/plugins/check_memory -w 80 -c 90
-EOF
-
-    # Enable and start NRPE
-    systemctl enable nagios-nrpe-server
-    systemctl start nagios-nrpe-server
-    
-    log "NRPE installation and configuration completed"
-}
 
 # Verify installation
 verify_installation() {
@@ -223,12 +198,7 @@ verify_installation() {
         log "WARNING: Docker service is not running"
     fi
     
-    # Check NRPE service
-    if systemctl is-active --quiet nagios-nrpe-server; then
-        log "NRPE service is running"
-    else
-        log "WARNING: NRPE service is not running"
-    fi
+
 }
 
 # Main execution
@@ -243,7 +213,7 @@ main() {
     install_puppet_agent
     wait_for_master
     test_connection
-    install_nrpe
+
     verify_installation
     
     log "Puppet Agent setup completed!"

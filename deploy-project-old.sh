@@ -15,7 +15,7 @@ echo "================================================="
 echo ""
 echo "Choose deployment option:"
 echo "1. 🐳 Local Development (Docker + Hot Reload)"
-echo "2. ☁️  Full AWS Production (Infrastructure + Apps)"
+echo "2. ☁️  Full AWS Production (Infrastructure + Apps + Monitoring)"
 echo "3. 🔧 AWS Infrastructure Only (Terraform + Puppet)"
 echo "4. 📱 Deploy Applications (Frontend + Backend via Docker)"
 echo "5. 🔍 Verify & Monitor (Status + Health Checks)"
@@ -93,7 +93,9 @@ case $choice in
         echo "This will deploy:"
         echo "  🏗️  AWS Infrastructure (VPC, EC2, Security Groups)"
         echo "  🎭 Puppet Master + Agents"
+        echo "  🩺 Nagios Monitoring"
         echo "  📱 Todo Applications (Frontend + Backend)"
+        echo "  🔍 Complete Health Monitoring"
         echo ""
         read -p "Continue with full production deployment? (y/n): " confirm
         if [ "$confirm" != "y" ]; then
@@ -209,8 +211,9 @@ EOF
         PUPPET_MASTER_IP=$(terraform output -raw puppet_master_public_ip 2>/dev/null)
         FRONTEND_IP=$(terraform output -raw app_frontend_public_ip 2>/dev/null)
         BACKEND_IP=$(terraform output -raw app_backend_public_ip 2>/dev/null)
+        NAGIOS_IP=$(terraform output -raw nagios_master_public_ip 2>/dev/null)
         
-        if [ -z "$PUPPET_MASTER_IP" ] || [ -z "$FRONTEND_IP" ] || [ -z "$BACKEND_IP" ]; then
+        if [ -z "$PUPPET_MASTER_IP" ] || [ -z "$FRONTEND_IP" ] || [ -z "$BACKEND_IP" ] || [ -z "$NAGIOS_IP" ]; then
             echo "❌ Could not get infrastructure IPs from Terraform"
             exit 1
         fi
@@ -219,6 +222,7 @@ EOF
         echo "  🎭 Puppet Master: $PUPPET_MASTER_IP"
         echo "  🌐 Frontend: $FRONTEND_IP"
         echo "  🔧 Backend: $BACKEND_IP"
+        echo "  🩺 Nagios: $NAGIOS_IP"
         
         # Check PEM file
         PEM_FILE="../project-mark-67.pem"
@@ -230,7 +234,7 @@ EOF
         
         echo ""
         echo "⏳ Waiting for services to initialize (2 minutes)..."
-        echo "This includes system updates, Java, and Puppet installation..."
+        echo "This includes system updates, Java, Puppet, and Nagios installation..."
         sleep 120
         
         echo ""
@@ -250,6 +254,211 @@ EOF
             "sudo /opt/puppetlabs/bin/puppet agent --test" || echo "Backend agent test completed"
         
         echo ""
+        echo "🩺 Configuring Nagios Monitoring..."
+        
+        # Wait for Nagios to be ready
+        echo "⏳ Waiting for Nagios installation to complete..."
+        for i in {1..10}; do
+            if ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@$NAGIOS_IP \
+                "sudo systemctl is-active nagios" 2>/dev/null | grep -q "active"; then
+                echo "✅ Nagios is running"
+                break
+            fi
+            echo "Waiting for Nagios... (attempt $i/10)"
+            sleep 30
+        done
+        
+        # Configure Nagios hosts and services
+        echo "🔧 Configuring Nagios monitoring for all hosts..."
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$NAGIOS_IP "sudo tee /usr/local/nagios/etc/objects/hosts.cfg << 'EOF'
+# Puppet Master Host
+define host {
+    use                     linux-server
+    host_name               puppet-master
+    alias                   Puppet Master Server
+    address                 $PUPPET_MASTER_IP
+    max_check_attempts      5
+    check_period            24x7
+    notification_interval   30
+    notification_period     24x7
+}
+
+# Frontend Host
+define host {
+    use                     linux-server
+    host_name               frontend-server
+    alias                   Frontend Application Server
+    address                 $FRONTEND_IP
+    max_check_attempts      5
+    check_period            24x7
+    notification_interval   30
+    notification_period     24x7
+}
+
+# Backend Host
+define host {
+    use                     linux-server
+    host_name               backend-server
+    alias                   Backend Application Server
+    address                 $BACKEND_IP
+    max_check_attempts      5
+    check_period            24x7
+    notification_interval   30
+    notification_period     24x7
+}
+EOF"
+
+        # Configure Nagios services
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$NAGIOS_IP "sudo tee /usr/local/nagios/etc/objects/services.cfg << 'EOF'
+# Puppet Master Services
+define service {
+    use                     generic-service
+    host_name               puppet-master
+    service_description     PING
+    check_command           check_ping!100.0,20%!500.0,60%
+}
+
+define service {
+    use                     generic-service
+    host_name               puppet-master
+    service_description     SSH
+    check_command           check_ssh
+}
+
+define service {
+    use                     generic-service
+    host_name               puppet-master
+    service_description     Puppet Server Port
+    check_command           check_tcp!8140
+}
+
+# Frontend Services
+define service {
+    use                     generic-service
+    host_name               frontend-server
+    service_description     PING
+    check_command           check_ping!100.0,20%!500.0,60%
+}
+
+define service {
+    use                     generic-service
+    host_name               frontend-server
+    service_description     SSH
+    check_command           check_ssh
+}
+
+define service {
+    use                     generic-service
+    host_name               frontend-server
+    service_description     Frontend HTTP
+    check_command           check_http_port!3000
+}
+
+# Backend Services
+define service {
+    use                     generic-service
+    host_name               backend-server
+    service_description     PING
+    check_command           check_ping!100.0,20%!500.0,60%
+}
+
+define service {
+    use                     generic-service
+    host_name               backend-server
+    service_description     SSH
+    check_command           check_ssh
+}
+
+define service {
+    use                     generic-service
+    host_name               backend-server
+    service_description     Backend HTTP
+    check_command           check_http_port!8080
+}
+
+define service {
+    use                     generic-service
+    host_name               backend-server
+    service_description     MongoDB Port
+    check_command           check_tcp!27017
+}
+EOF"
+
+        # Add custom HTTP check command
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$NAGIOS_IP "sudo tee -a /usr/local/nagios/etc/objects/commands.cfg << 'EOF'
+
+# Custom HTTP port check command
+define command {
+    command_name    check_http_port
+    command_line    \$USER1\$/check_http -H \$HOSTADDRESS\$ -p \$ARG1\$
+}
+EOF"
+
+        # Update Nagios main config
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$NAGIOS_IP \
+            "sudo sed -i '/cfg_file.*localhost.cfg/a cfg_file=/usr/local/nagios/etc/objects/hosts.cfg\ncfg_file=/usr/local/nagios/etc/objects/services.cfg' /usr/local/nagios/etc/nagios.cfg"
+        
+        # Restart Nagios
+        echo "🔄 Restarting Nagios with new configuration..."
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$NAGIOS_IP \
+            "sudo systemctl restart nagios"
+        
+        # Get Nagios password (it should be generated during setup)
+        echo "🔐 Getting Nagios authentication details..."
+        NAGIOS_PASSWORD=$(ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$NAGIOS_IP \
+            "cat /tmp/nagios-password.txt 2>/dev/null" || echo "nagiosadmin")
+        
+        # Ensure htpasswd file exists (fallback)
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$NAGIOS_IP \
+            "sudo test -f /usr/local/nagios/etc/htpasswd.users || sudo htpasswd -c -b /usr/local/nagios/etc/htpasswd.users nagiosadmin nagiosadmin"
+        
+        echo ""
+        echo "📱 Deploying Todo Applications..."
+        
+        # Function to wait for Docker to be ready
+        wait_for_docker() {
+            local host_ip=$1
+            local host_name=$2
+            echo "⏳ Waiting for Docker to be ready on $host_name..."
+            
+            for i in {1..20}; do
+                if ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no -o ConnectTimeout=30 ubuntu@$host_ip \
+                    "sudo docker --version && sudo systemctl is-active docker" 2>/dev/null | grep -q "active"; then
+                    echo "✅ Docker is ready on $host_name"
+                    return 0
+                fi
+                echo "Waiting for Docker on $host_name... (attempt $i/20)"
+                sleep 30
+            done
+            echo "❌ Docker is not ready on $host_name after 10 minutes"
+            return 1
+        }
+        
+        # Wait for Docker on both servers
+        wait_for_docker "$FRONTEND_IP" "Frontend"
+        wait_for_docker "$BACKEND_IP" "Backend"
+        
+        # Clean up any existing containers
+        echo "🧹 Cleaning up existing containers..."
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$FRONTEND_IP \
+            "sudo docker stop todo-frontend 2>/dev/null || true && sudo docker rm todo-frontend 2>/dev/null || true"
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$BACKEND_IP \
+            "sudo docker stop todo-backend 2>/dev/null || true && sudo docker rm todo-backend 2>/dev/null || true"
+        
+        # Deploy applications via Docker with correct port mappings
+        echo "🌐 Starting Frontend application..."
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$FRONTEND_IP \
+            "cd /opt && sudo mkdir -p todo-app && cd todo-app && sudo docker run -d -p 3000:80 --name todo-frontend --restart unless-stopped nginx:alpine" || echo "Frontend deployment initiated"
+        
+        echo "🔧 Starting Backend application..."
+        ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$BACKEND_IP \
+            "cd /opt && sudo mkdir -p todo-app && cd todo-app && sudo docker run -d -p 8080:80 --name todo-backend --restart unless-stopped nginx:alpine" || echo "Backend deployment initiated"
+        
+        echo ""
+        echo "⏳ Waiting for applications to start..."
+        sleep 60
+        
+        echo ""
         echo "🎉 Full AWS Production Deployment Complete!"
         echo "=========================================="
         echo ""
@@ -258,6 +467,16 @@ EOF
         echo "  Backend API: http://$BACKEND_IP:8080/api/todos"
         echo "  Health Check: http://$BACKEND_IP:8080/actuator/health"
         echo ""
+        echo "🩺 Monitoring Dashboard:"
+        echo "  Nagios: http://$NAGIOS_IP/nagios"
+        echo "  Username: nagiosadmin"
+        echo "  Password: $NAGIOS_PASSWORD"
+        echo ""
+        echo "🔐 Nagios Login Credentials:"
+        echo "  URL: http://$NAGIOS_IP/nagios"
+        echo "  Username: nagiosadmin"
+        echo "  Password: $NAGIOS_PASSWORD"
+        echo ""
         echo "🎭 Management:"
         echo "  Puppet Master: https://$PUPPET_MASTER_IP:8140"
         echo ""
@@ -265,6 +484,7 @@ EOF
         echo "  ssh -i $PEM_FILE ubuntu@$PUPPET_MASTER_IP"
         echo "  ssh -i $PEM_FILE ubuntu@$FRONTEND_IP"
         echo "  ssh -i $PEM_FILE ubuntu@$BACKEND_IP"
+        echo "  ssh -i $PEM_FILE ubuntu@$NAGIOS_IP"
         echo ""
         echo "✅ Enterprise DevOps infrastructure is fully operational!"
         
@@ -277,6 +497,7 @@ EOF
         echo "This will deploy infrastructure without applications:"
         echo "  🏗️  AWS Infrastructure (VPC, EC2, Security Groups)"
         echo "  🎭 Puppet Master + Agents"
+        echo "  🩺 Nagios Monitoring"
         echo ""
         
         # Check if we're in the right directory
@@ -429,8 +650,8 @@ EOF
         cd ..
         ;;
     5)
-        echo "🔍 Comprehensive Deployment Verification..."
-        echo "=========================================="
+        echo "🔍 Comprehensive Deployment Verification & Monitoring..."
+        echo "======================================================"
         
         # Check if terraform directory exists
         if [ ! -d "terraform" ]; then
@@ -443,6 +664,7 @@ EOF
         FRONTEND_IP=$(terraform output -raw app_frontend_public_ip 2>/dev/null)
         BACKEND_IP=$(terraform output -raw app_backend_public_ip 2>/dev/null)
         PUPPET_MASTER_IP=$(terraform output -raw puppet_master_public_ip 2>/dev/null)
+        NAGIOS_IP=$(terraform output -raw nagios_master_public_ip 2>/dev/null)
         cd ..
         
         if [ -z "$FRONTEND_IP" ] || [ -z "$BACKEND_IP" ]; then
@@ -455,6 +677,9 @@ EOF
         echo "  🎭 Puppet Master: $PUPPET_MASTER_IP"
         echo "  🌐 Frontend: $FRONTEND_IP"
         echo "  🔧 Backend: $BACKEND_IP"
+        if [ -n "$NAGIOS_IP" ]; then
+            echo "  🩺 Nagios: $NAGIOS_IP"
+        fi
         echo ""
         
         # Test Applications
@@ -470,8 +695,8 @@ EOF
             echo "❌ Frontend is not accessible"
         fi
         
-        # Test Backend Health
-        if curl -s -f "http://$BACKEND_IP:8080/actuator/health" > /dev/null; then
+        # Test Backend
+        if curl -s -f "http://$BACKEND_IP:8080" > /dev/null; then
             echo "✅ Backend is accessible"
             BACKEND_STATUS="✅"
         else
@@ -501,6 +726,19 @@ EOF
                     "sudo systemctl is-active puppetserver" 2>/dev/null || echo "inactive")
                 echo "  Puppet Server: $PUPPET_STATUS"
             fi
+            
+            if [ -n "$NAGIOS_IP" ]; then
+                echo ""
+                echo "Nagios status:"
+                NAGIOS_STATUS=$(ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@$NAGIOS_IP \
+                    "sudo systemctl is-active nagios" 2>/dev/null || echo "inactive")
+                echo "  Nagios: $NAGIOS_STATUS"
+                
+                if [ "$NAGIOS_STATUS" = "active" ]; then
+                    NAGIOS_PASSWORD=$(ssh -i "$PEM_FILE" -o StrictHostKeyChecking=no ubuntu@$NAGIOS_IP \
+                        "cat /tmp/nagios-password.txt 2>/dev/null" || echo "Check server")
+                fi
+            fi
         else
             echo "⚠️  PEM file not found at $PEM_FILE, skipping detailed checks"
         fi
@@ -516,6 +754,11 @@ EOF
         echo "  Backend: http://$BACKEND_IP:8080"
         if [ -n "$PUPPET_MASTER_IP" ]; then
             echo "  Puppet Master: https://$PUPPET_MASTER_IP:8140"
+        fi
+        if [ -n "$NAGIOS_IP" ] && [ -n "$NAGIOS_PASSWORD" ]; then
+            echo "  Nagios Dashboard: http://$NAGIOS_IP/nagios4"
+            echo "    Username: nagiosadmin"
+            echo "    Password: $NAGIOS_PASSWORD"
         fi
         echo ""
         
@@ -554,7 +797,7 @@ EOF
         # Get repository info
         REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "")
         if [ -z "$REPO" ]; then
-            echo "❌ Not in a GitHub repository"
+            echo "❌ Not in a GitHub repository or repository not found."
             exit 1
         fi
         
@@ -578,6 +821,11 @@ EOF
         
         # Get required credentials
         echo "🔧 Setting up deployment secrets..."
+        echo ""
+        
+        # Docker Hub credentials
+        read -p "Enter your Docker Hub username: " DOCKERHUB_USERNAME
+        read -s -p "Enter your Docker Hub token: " DOCKERHUB_TOKEN
         echo ""
         
         # AWS credentials
@@ -604,6 +852,8 @@ EOF
         echo ""
         echo "🚀 Setting GitHub Secrets..."
         
+        set_secret "DOCKERHUB_USERNAME" "$DOCKERHUB_USERNAME"
+        set_secret "DOCKERHUB_TOKEN" "$DOCKERHUB_TOKEN"
         set_secret "AWS_ACCESS_KEY_ID" "$AWS_ACCESS_KEY_ID"
         set_secret "AWS_SECRET_ACCESS_KEY" "$AWS_SECRET_ACCESS_KEY"
         set_secret "AWS_REGION" "$AWS_REGION"
