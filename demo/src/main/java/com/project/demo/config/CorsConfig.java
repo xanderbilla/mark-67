@@ -1,27 +1,32 @@
 package com.project.demo.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
-        // CORS configuration for API and Actuator endpoints
+
+        @Value("${cors.allowed-origins:http://localhost:3000}")
+        private String allowedOrigins;
 
         @Override
         public void addCorsMappings(CorsRegistry registry) {
-                // API endpoints - Allow all origins for production deployment
+                String[] origins = allowedOrigins.split(",");
+
+                // API endpoints
                 registry.addMapping("/api/**")
-                                .allowedOriginPatterns("*") // Allow all origins for flexibility
+                                .allowedOrigins(origins)
                                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                                 .allowedHeaders("*")
-                                .allowCredentials(false); // Set to false when using allowedOriginPatterns("*")
+                                .allowCredentials(true);
 
                 // Actuator endpoints
                 registry.addMapping("/actuator/**")
-                                .allowedOriginPatterns("*") // Allow all origins for flexibility
+                                .allowedOrigins(origins)
                                 .allowedMethods("GET", "OPTIONS")
                                 .allowedHeaders("*")
-                                .allowCredentials(false); // Set to false when using allowedOriginPatterns("*")
+                                .allowCredentials(true);
         }
 }

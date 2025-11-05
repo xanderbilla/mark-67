@@ -112,6 +112,7 @@ jobs:
               -p 8080:8080 \
               -e SPRING_DATA_MONGODB_URI=mongodb://todo-mongodb:27017/todoapp \
               -e SPRING_PROFILES_ACTIVE=production \
+              -e CORS_ALLOWED_ORIGINS=http://localhost:3000,http://${{ needs.get-infrastructure.outputs.frontend-ip }}:3000 \
               --link todo-mongodb:todo-mongodb \
               ${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.SHORT_SHA }}
 
