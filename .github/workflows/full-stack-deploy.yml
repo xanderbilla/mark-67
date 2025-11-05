@@ -110,9 +110,9 @@ jobs:
               --name todo-backend \
               --restart unless-stopped \
               -p 8080:8080 \
-              -e SPRING_DATA_MONGODB_URI=mongodb://localhost:27017/todoapp \
+              -e SPRING_DATA_MONGODB_URI=mongodb://todo-mongodb:27017/todoapp \
               -e SPRING_PROFILES_ACTIVE=production \
-              --network host \
+              --link todo-mongodb:todo-mongodb \
               ${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.SHORT_SHA }}
 
             # Verify backend
